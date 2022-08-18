@@ -27,7 +27,9 @@ Route::group(['prefix' => 'admin'],function(){
 	});
 });
 
-// ======================== customer routes =======================
+// ========================== End of Admin routes ==========================
+
+// ======================== Customer routes =======================
 
 Route::group(['prefix' => 'customer'],function(){
 	Route::post('/login', [AuthController::class, 'authenticate']);
@@ -39,7 +41,5 @@ Route::group(['prefix' => 'customer'],function(){
 	});
 });
 
-Route::fallback(function(){
-    return response()->json(['message' => 'Not Found.'], 404);
-})->name('api.fallback.404');
+// ============================= End of customer routes ===================
 

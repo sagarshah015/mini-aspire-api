@@ -40,19 +40,22 @@ class LoanController extends Controller
             return $this->formatResponse(false,$validator->messages(),$this->validationErrorMessage,422);
         }
         try {
+            // All transaction in DB will be rollback if getting some error
             \DB::beginTransaction();
-            $userLoanData = array_merge($request->all(), ['userId' => \Auth::user()->id,'balanceAmount'=>$request->amount]);
+            $userLoanData = array_merge($request->all(), ['userId' => \Auth::user()->id,'dueAmount'=>$request->amount]);
             $userLoan = UserLoan::create($userLoanData);
             if($userLoan){
             	if($this->saveLoanSchedule($userLoan->id,$request)){
+                    // if all things works file than commit changes to DB
                     \DB::commit();
                     return $this->formatResponse(true,$userLoan->toArray(),'Loan Created successfully!');
                 }
             }
+            // thrown a exception if some error occure
             throw new \Exception();            
          }  catch (\Exception $e) {
             \DB::rollBack();
-            return $this->formatResponse(false,[],$this->exceptionErrorMessage,$e->getCode() ?: 400);
+            return $this->formatResponse(false,[],$this->exceptionErrorMessage,400);
         }
 
     }
@@ -69,7 +72,8 @@ class LoanController extends Controller
         $scheduleDate = date('Y-m-d');
         
         for($i=1;$i<=$terms;$i++){
-        	if($terms > 2 && $i==$terms){
+            // last payment schedule term should be adjust as per remaining amount
+        	if($terms > 1 && $i==$terms){
         		$repaymentAmount = round($request->amount -	$sumPayments,4);
         	}
         	$scheduleDate = $this->getScheduleDate($scheduleDate);
@@ -83,6 +87,7 @@ class LoanController extends Controller
         		];
         	$sumPayments+=$repaymentAmount;
         }
+        // create loan schedule term amount according to total amount/terms
         if(LoanSchedule::insert($userPaymentSchedule)){
             return true;
         }
@@ -107,21 +112,24 @@ class LoanController extends Controller
         if ($validator->fails()) {
             return $this->formatResponse(false,$validator->messages(),$this->validationErrorMessage);
         }
+        // check that only loan owner/user can do payment
         if($userLoan->userId!=\Auth::user()->id){
             return $this->formatResponse(false,[],$this->exceptionErrorMessage);
         }
 
         $loanId = $request->loanId;
+        // get all schedule term loans which are pending
         $userLoan = $userLoan->load(['loan_schedules'=>function($query){
             return $query->where('isPaid',0);
         }]);
 
         $amount = floatval($request->amount);
-
+        // validate loan status and amount
         $errorMessage = $this->validateLoan($userLoan,$amount);
         if(isset($errorMessage['status']) && !$errorMessage['status']){
             return $this->formatResponse(false,[],$errorMessage['message']);
         }
+        // check amount with schedule amount
         $scheduleAmount = $this->checkAndGetScheduleAmount($userLoan,$amount);
         if(!$scheduleAmount){
             return $this->formatResponse(false,[],'Amount should not be less than schedule/due amount');
@@ -135,7 +143,7 @@ class LoanController extends Controller
             throw new \Exception();            
         }  catch (\Exception $e) {
             \DB::rollBack();
-            return $this->formatResponse(false,[],$this->exceptionErrorMessage,$e->getCode() ?: 400);
+            return $this->formatResponse(false,[],$this->exceptionErrorMessage,400);
         }
     }
 
@@ -165,13 +173,13 @@ class LoanController extends Controller
         // if user paid for 2 terms amount in single go, then update isPaid status for 2 terms
         if(LoanSchedule::whereIn('id',$loanScheduleIds)->update(['isPaid'=>1])){
             if($this->saveLoanPayments($userLoan->id,$amount)){
-                // if last payment term then balanceAmount set as 0
+                // if last payment term then dueAmount set as 0
                 if($lastPaymentTerm){
-                    $userLoan->balanceAmount = 0;
+                    $userLoan->dueAmount = 0;
                     $userLoan->status = 2;
                 }else{
-                    // deduct requested amount from balanceAmount
-                    $userLoan->balanceAmount-=$amount;
+                    // deduct requested amount from dueAmount
+                    $userLoan->dueAmount-=$amount;
                 }
                 if($userLoan->save()){
                     return true;
@@ -188,7 +196,7 @@ class LoanController extends Controller
     private function checkAndGetScheduleAmount($userLoan,$amount){
         if(isset($userLoan->loan_schedules[0]) && !empty($userLoan->loan_schedules[0])){
             $scheduleAmount = $userLoan->loan_schedules[0]->amount;
-            if($amount < $scheduleAmount && $amount < $userLoan->balanceAmount){
+            if($amount < $scheduleAmount && $amount < $userLoan->dueAmount){
                 return false;
             }
             return $scheduleAmount;
@@ -208,9 +216,9 @@ class LoanController extends Controller
         }else if($userLoan->status==2){
             $status = false;
             $message = 'you have already paid this loan';
-        }else if($userLoan->balanceAmount < $amount){
+        }else if($userLoan->dueAmount < $amount){
             $status = false;
-            $message = 'Amount should not be greater than due amount('.$userLoan->balanceAmount. ' '.config("custom_vars.currency").')';
+            $message = 'Amount should not be greater than due amount('.$userLoan->dueAmount. ' '.config("custom_vars.currency").')';
         }
         return ['status'=>$status,'message'=>$message];
     }
@@ -228,9 +236,10 @@ class LoanController extends Controller
     /*
         Use : return all loan of user
         Return a key value array 
+        get loans array from loans key in main array
     */
     function viewLoans(){
         $userLoans = User::whereId(\Auth::user()->id)->with(['loans'])->get()->toArray();
-        return $this->formatResponse(false,$userLoans,$this->exceptionErrorMessage);
+        return $this->formatResponse(false,$userLoans,'Customer Loans');
     }
 }

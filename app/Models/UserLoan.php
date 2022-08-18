@@ -12,7 +12,7 @@ class UserLoan extends Model
         'userId',
         'name',
         'amount',
-        'balanceAmount',
+        'dueAmount',
         'terms',
     ];
 

@@ -41,22 +41,6 @@ class AuthController extends Controller
         }
  	
  		//Token created, return with success response and jwt token
-        return response()->json([
-            'success' => true,
-            'token' => $token,
-        ]);
-    }
- 
-    
- 
-    public function get_user(Request $request)
-    {
-        $this->validate($request, [
-            'token' => 'required'
-        ]);
- 
-        $user = JWTAuth::authenticate($request->token);
- 
-        return response()->json(['user' => $user]);
+        return $this->formatResponse(true,[],'Login successfully.')->header('token',$token);
     }
 }

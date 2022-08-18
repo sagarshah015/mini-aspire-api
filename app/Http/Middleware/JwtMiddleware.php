@@ -19,9 +19,11 @@ class JwtMiddleware extends BaseMiddleware
      */
     public function handle($request, Closure $next, $role = null)
     {
-        try {
+        try {            
+            if(!JWTAuth::parseToken($request->header('token'))->authenticate()){
+                return response()->json(['status' =>false,'message' => 'User is not exists'],403);
+            }
             $token_role = JWTAuth::parseToken($request->header('token'))->getClaim('role');
-            JWTAuth::parseToken($request->header('token'))->authenticate();
         } catch (Exception $e) {
             if ($e instanceof \Tymon\JWTAuth\Exceptions\TokenInvalidException){
                 return response()->json(['status' =>false,'message' => 'Token is Invalid'],403);
