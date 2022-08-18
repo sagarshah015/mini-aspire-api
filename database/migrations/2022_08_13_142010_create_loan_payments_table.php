@@ -17,7 +17,7 @@ class CreateLoanPaymentsTable extends Migration
             $table->increments('id');
             $table->unsignedInteger('userLoanId');
             $table->foreign('userLoanId')->references('id')->on('user_loans');;
-            $table->double('amount', 8, 4);
+            $table->double('amount', 12, 4);
             $table->timestamps();
         });
     }
